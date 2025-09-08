@@ -11,7 +11,7 @@ export async function POST(req: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama3.1-8b",
+        model: "llama-4-maverick-17b-128e-instruct",
         messages: [
           {
             role: "system",
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
           },
         ],
         logprobs: true,
+        temperature: 0.5,
         top_logprobs: 3,
       }),
     });

@@ -4,9 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shuffle } from "./helpers";
+
+type TopLogProb = { token: string; score?: number };
+type LogProbItem = {
+  token: string;
+  top_logprobs: TopLogProb[];
+};
 export default function Home() {
+  const [assistantLogProbs, setAssistantLogProbs] = useState<
+    LogProbItem[] | null
+  >(null);
   const [assistantAnswer, setAssistantAnswer] = useState<string[]>([]);
-  const [assistantLogProbs, setAssistantLogProbs] = useState();
   const [currentToken, setCurrentToken] = useState<number>(-1);
   const [currentLogTokens, setLogTokens] = useState<string[]>([]);
   const [userPredictedAnswer, setUserPredictedAnswer] = useState<string[]>([]);
@@ -23,7 +31,7 @@ export default function Home() {
   );
   const startGame = async () => {
     setIsRoundFinished(false);
-    setAnswerTime(0)
+    setAnswerTime(0);
     if (userPredictedAnswer.length !== 0) {
       setMessages((prev) => [
         ...prev,
@@ -34,6 +42,8 @@ export default function Home() {
       ]);
     }
     setIsLoading(true);
+    setAssistantAnswer([])
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -46,16 +56,19 @@ export default function Home() {
       }),
     });
     const data = await response.json();
-    data.response.choices[0].logprobs.content.forEach((logProb) => {
-      if (logProb.token !== "<|eot_id|>") {
-        setAssistantAnswer((prev) => [...prev, logProb.token]);
+    data.response.choices[0].logprobs.content.forEach(
+      (logProb: LogProbItem) => {
+        if (logProb.token !== "<|eot_id|>" && logProb.token !== "<|eot|>") {
+          setAssistantAnswer((prev) => [...prev, logProb.token]);
+        }
       }
-    });
+    );
     setAssistantLogProbs(data.response.choices[0].logprobs.content);
     setAssistantLogProbslength(
       data.response.choices[0].logprobs.content.length
     );
     setUserPredictedAnswer([]);
+    
     setCurrentToken(0);
     setIsGameStarted(true);
     intervalRef.current = setInterval(() => {
@@ -68,12 +81,16 @@ export default function Home() {
     if (!assistantLogProbs) return;
     const variants: string[] = [];
     for (const logProb of assistantLogProbs[currentToken].top_logprobs) {
-      if (logProb.token !== "<|eot_id|>") {
+      if (logProb.token !== "<|eot_id|>" && logProb.token !== "<|eot|>") {
         variants.push(logProb.token);
       }
     }
     const mainToken = assistantLogProbs[currentToken].token;
-    if (mainToken !== "<|eot_id|>" && !variants.includes(mainToken)) {
+    if (
+      mainToken !== "<|eot_id|>" &&
+      mainToken !== "<|eot|>" &&
+      !variants.includes(mainToken)
+    ) {
       variants.push(mainToken);
     }
     setLogTokens(shuffle(variants));
@@ -118,7 +135,6 @@ export default function Home() {
   }, []);
   const checkCorrectTokens = () => {
     let correct = 0;
-
     for (let i = 0; i < AssistantLogProbslength; i++) {
       if (userPredictedAnswer[i] == assistantAnswer[i]) {
         correct++;
@@ -128,7 +144,7 @@ export default function Home() {
     return Math.round((correct / AssistantLogProbslength) * 100);
   };
   return (
-    <main className="w-screen h-full flex flex-col items-center">
+    <main className="w-screen h-full flex flex-col items-center relative">
       <div className="h-full flex flex-col items-center relative max-w-[640px]">
         <div className="pt-14 flex flex-col gap-12 pb-[200px]">
           {messages?.map((message) => (
@@ -187,33 +203,33 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div className=" bg-[#303030] px-5 py-[16px] sticky rounded-[28px] bottom-8  w-[640px] h-fit items-end flex flex-col">
-          <Textarea
-            name="prompt"
-            id="prompt"
-            value={prompt}
-            disabled={isGameStarted || isLoading}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Задайте вопрос что-бы начать игру..."
-            className=" text-white border-0 placeholder:text-gray-500 w-full hover resize-none overflow-hidden break-words focus-visible:ring-0  focus:outline-none focus:ring-0"
-          />
-          <Button
-            onClick={startGame}
-            size={"icon"}
-            disabled={isGameStarted || isLoading}
-            className="bg-white rounded-full w-9 h-9 hover:bg-[#ffffff1a]"
+      </div>
+      <div className=" bg-[#303030] px-5 py-[16px] sticky rounded-[28px] bottom-8  w-[640px] h-fit items-end flex flex-col">
+        <Textarea
+          name="prompt"
+          id="prompt"
+          value={prompt}
+          disabled={isGameStarted || isLoading}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Задайте вопрос что-бы начать игру..."
+          className=" text-white border-0 placeholder:text-gray-500 w-full hover resize-none overflow-hidden break-words focus-visible:ring-0  focus:outline-none focus:ring-0"
+        />
+        <Button
+          onClick={startGame}
+          size={"icon"}
+          disabled={isGameStarted || isLoading}
+          className="bg-white rounded-full w-9 h-9 hover:bg-[#ffffff1a]"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="black"
+            xmlns="http://www.w3.org/2000/svg"
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="black"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M8.99992 16V6.41407L5.70696 9.70704C5.31643 10.0976 4.68342 10.0976 4.29289 9.70704C3.90237 9.31652 3.90237 8.6835 4.29289 8.29298L9.29289 3.29298L9.36907 3.22462C9.76184 2.90427 10.3408 2.92686 10.707 3.29298L15.707 8.29298L15.7753 8.36915C16.0957 8.76192 16.0731 9.34092 15.707 9.70704C15.3408 10.0732 14.7618 10.0958 14.3691 9.7754L14.2929 9.70704L10.9999 6.41407V16C10.9999 16.5523 10.5522 17 9.99992 17C9.44764 17 8.99992 16.5523 8.99992 16Z"></path>
-            </svg>
-          </Button>
-        </div>
+            <path d="M8.99992 16V6.41407L5.70696 9.70704C5.31643 10.0976 4.68342 10.0976 4.29289 9.70704C3.90237 9.31652 3.90237 8.6835 4.29289 8.29298L9.29289 3.29298L9.36907 3.22462C9.76184 2.90427 10.3408 2.92686 10.707 3.29298L15.707 8.29298L15.7753 8.36915C16.0957 8.76192 16.0731 9.34092 15.707 9.70704C15.3408 10.0732 14.7618 10.0958 14.3691 9.7754L14.2929 9.70704L10.9999 6.41407V16C10.9999 16.5523 10.5522 17 9.99992 17C9.44764 17 8.99992 16.5523 8.99992 16Z"></path>
+          </svg>
+        </Button>
       </div>
     </main>
   );
