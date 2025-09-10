@@ -3,13 +3,11 @@ import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { shuffle } from "./helpers";
+import { shuffle, resetInterval } from "../helpers/mainPageHelpers";
+import PreviousMessages from "@/components/ui/PreviousMessages";
 
-type TopLogProb = { token: string; score?: number };
-type LogProbItem = {
-  token: string;
-  top_logprobs: TopLogProb[];
-};
+import { Message, LogProbItem } from "./types/types";
+
 export default function Home() {
   const [assistantLogProbs, setAssistantLogProbs] = useState<
     LogProbItem[] | null
@@ -18,7 +16,7 @@ export default function Home() {
   const [currentToken, setCurrentToken] = useState<number>(-1);
   const [currentLogTokens, setLogTokens] = useState<string[]>([]);
   const [userPredictedAnswer, setUserPredictedAnswer] = useState<string[]>([]);
-  const [AssistantLogProbslength, setAssistantLogProbslength] = useState(0);
+  const [assistantLogProbsLength, setAssistantLogProbsLength] = useState(0);
   const [answerTime, setAnswerTime] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [isGameStarted, setIsGameStarted] = useState(false);
@@ -26,12 +24,18 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRoundFinished, setIsRoundFinished] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>(
-    []
-  );
-  const startGame = async () => {
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  const clearStates = () => {
     setIsRoundFinished(false);
     setAnswerTime(0);
+    setAssistantAnswer([]);
+    resetInterval(intervalRef);
+    setUserPredictedAnswer([]);
+    setCurrentToken(0);
+  };
+  const startGame = async () => {
+    clearStates();
     if (userPredictedAnswer.length !== 0) {
       setMessages((prev) => [
         ...prev,
@@ -42,12 +46,7 @@ export default function Home() {
       ]);
     }
     setIsLoading(true);
-    setAssistantAnswer([])
 
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
     const response = await fetch("/api/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -64,17 +63,14 @@ export default function Home() {
       }
     );
     setAssistantLogProbs(data.response.choices[0].logprobs.content);
-    setAssistantLogProbslength(
+    setAssistantLogProbsLength(
       data.response.choices[0].logprobs.content.length
     );
-    setUserPredictedAnswer([]);
-    
-    setCurrentToken(0);
     setIsGameStarted(true);
+    setIsLoading(false);
     intervalRef.current = setInterval(() => {
       setAnswerTime((prev) => prev + 1);
     }, 1000);
-    setIsLoading(false);
   };
 
   const currentVariant = () => {
@@ -101,7 +97,7 @@ export default function Home() {
     setCurrentToken((prev) => prev + 1);
   };
   useEffect(() => {
-    if (currentToken + 1 == AssistantLogProbslength && isGameStarted) {
+    if (currentToken + 1 == assistantLogProbsLength && isGameStarted) {
       FinishGame();
     } else {
       currentVariant();
@@ -109,10 +105,7 @@ export default function Home() {
   }, [currentToken]);
 
   const FinishGame = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    resetInterval(intervalRef);
     setPredictedPercent(checkCorrectTokens());
     setMessages((prev) => [
       ...prev,
@@ -127,42 +120,25 @@ export default function Home() {
   };
   useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      resetInterval(intervalRef);
     };
   }, []);
   const checkCorrectTokens = () => {
     let correct = 0;
-    for (let i = 0; i < AssistantLogProbslength; i++) {
+    for (let i = 0; i < assistantLogProbsLength; i++) {
       if (userPredictedAnswer[i] == assistantAnswer[i]) {
         correct++;
       }
     }
 
-    return Math.round((correct / AssistantLogProbslength) * 100);
+    return Math.round((correct / assistantLogProbsLength) * 100);
   };
+
   return (
     <main className="w-screen h-full flex flex-col items-center relative">
       <div className="h-full flex flex-col items-center relative max-w-[640px]">
         <div className="pt-14 flex flex-col gap-12 pb-[200px]">
-          {messages?.map((message) => (
-            <div
-              className="flex flex-col items-end w-[640px]"
-              key={Math.random()}
-            >
-              {message.role == "user" && message.content !== "" ? (
-                <div className="bg-[#323232d9] max-w-[448px] text-white px-4 py-[12px] h-fit rounded-[18px]">
-                  <p className=" text-white break-words">{message.content}</p>
-                </div>
-              ) : (
-                <div className="w-full">
-                  <p className=" text-white">{message.content}</p>
-                </div>
-              )}
-            </div>
-          ))}
+          <PreviousMessages messages={messages} />
           <div className=" flex flex-col gap-10 items-end w-[640px]">
             {(isLoading || isGameStarted) && (
               <div className="bg-[#323232d9] max-w-[448px] text-white px-4 py-[12px] h-fit rounded-[18px]">
@@ -170,7 +146,7 @@ export default function Home() {
               </div>
             )}
             <div className=" w-full">
-              {currentToken + 1 == AssistantLogProbslength &&
+              {currentToken + 1 == assistantLogProbsLength &&
                 isRoundFinished == true && (
                   <div className="flex gap-4 mb-2">
                     <p className="text-white">

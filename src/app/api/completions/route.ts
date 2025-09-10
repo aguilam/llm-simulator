@@ -28,7 +28,6 @@ export async function POST(req: Request) {
       }),
     });
 
-    console.log(result);
     const response = await result.json();
     return NextResponse.json({ response });
   } catch (err) {
